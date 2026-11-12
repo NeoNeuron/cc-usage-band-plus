@@ -489,3 +489,32 @@ test('the desktop info row keeps each part in its color, in both color schemes',
   // What is drawn is escaped
   expect(infoSvg({ model: null, effort: null }, { ...GIT, branch: 'a<b&c' }, []).svg).toContain('a&lt;b&amp;c*')
 })
+
+test('the desktop app\'s plan tool fills the todo list: laid out, advanced, finished at wrap-up', async ($, on) => {
+  const PLAN = 'mcp__ccd_turn__update_plan'
+  const items = [
+    { content: 'Count 1', status: 'in_progress' },
+    { content: 'Count 2', status: 'pending' },
+    { content: 'Count 3', status: 'pending' },
+  ]
+  let list = applyTodoCall([], PLAN, { items, scope: 'continuation' }, {})
+  expect(list.map(t => t.status)).toEqual(['in_progress', 'pending', 'pending'])
+  list = applyTodoCall(list, PLAN, { advance: true }, {})
+  expect(list.map(t => t.status)).toEqual(['completed', 'in_progress', 'pending'])
+  list = applyTodoCall(list, PLAN, { advance: true }, {})
+  expect(infoText({ model: null, effort: null }, null, list)).toBe('▸ Count 3 (2/3)')
+  list = applyTodoCall(list, 'mcp__ccd_turn__wrap_up', { recap: 'done' }, {})
+  expect(infoText({ model: null, effort: null }, null, list)).toBe('✓ 3/3')
+  // A wrap-up leaves the other tools' tasks as they are, and an advance with no plan does nothing
+  const task: Todo[] = [{ id: '7', subject: 'Fix the bug', status: 'in_progress' }]
+  expect(applyTodoCall(task, 'mcp__ccd_turn__wrap_up', {}, {})).toEqual(task)
+  expect(applyTodoCall(task, PLAN, { advance: true }, {})).toEqual(task)
+
+  // Through the hook, with the text result an MCP tool gives
+  on('tool.call', () => ({ result: [{ type: 'text', text: 'Plan shown (3 steps).' }] }) as never)
+  await $.tool.call({ tool: PLAN, items, scope: 'first_task' } as never)
+  await $.tool.call({ tool: PLAN, advance: true } as never)
+  const ui = await $.ui.mount({ plugin: 'usage-band-plus', surface: 'desktop', ...BAND })
+  expect((await ui.find({ type: 'Svg' }))?.props.alt).toBe('▸ Count 2 (1/3)')
+  await ui.unmount()
+})

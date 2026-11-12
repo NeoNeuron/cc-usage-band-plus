@@ -114,7 +114,7 @@ export USAGE_BAND_ICONS=unicode   # auto (default) · nerd · unicode · ascii
 | Cache hit | Last turn's `cache_read / (input + cache_read + cache_write)` | Summed over every request in the turn. Subagent turns are not counted. |
 | Model · effort | The model and effort of the main loop's latest request | Before the first request: `/model`'s value, and the effort saved for that model (`modelSettings`), else the `effortLevel` setting, else `CLAUDE_CODE_EFFORT_LEVEL`. Effort is hidden for a model that takes none. |
 | Git | `git --no-optional-locks status --porcelain=v2 --branch` in the session's directory | Read at session start, after each turn, after a Bash, Edit, Write or NotebookEdit call, and every minute. Hidden outside a repository. |
-| Todos | The results of `TodoWrite`, `TaskCreate` and `TaskUpdate` calls, subagents' included | Built from the calls the mod sees, so tasks made before it loaded appear once they are updated. |
+| Todos | The results of `TodoWrite`, `TaskCreate` and `TaskUpdate` calls, subagents' included, and the desktop app's own plan tool | Built from the calls the mod sees, so tasks made before it loaded appear once they are updated. |
 
 ## Terminal compatibility
 
@@ -132,7 +132,7 @@ If icons show as boxes, set `USAGE_BAND_ICONS=unicode` (see [Configuration](#con
 Mods run with the same access as Claude Code itself and are not sandboxed, so here is everything this one touches:
 
 - **Reads** the session's usage figures (`session.measure`, `turn.complete`, `$.session.usage`), its model (`$.session.model`, `turn.step`), the `effortLevel` and `modelSettings` settings, and the `TERM_PROGRAM`, `USAGE_BAND_ICONS` and `CLAUDE_CODE_EFFORT_LEVEL` environment variables
-- **Watches** the results of `TodoWrite`, `TaskCreate` and `TaskUpdate` calls for the todo list, and passes every call through unchanged
+- **Watches** the results of `TodoWrite`, `TaskCreate` and `TaskUpdate` calls, and the desktop app's plan tool, for the todo list, and passes every call through unchanged
 - **Runs** one command, `git --no-optional-locks status --porcelain=v2 --branch`, in the session's directory. It is read-only and takes no lock on the repository.
 - **Registers** one command, `/usage-band-plus-preview`
 - **Draws** the band above the prompt

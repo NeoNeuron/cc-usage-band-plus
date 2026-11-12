@@ -53,7 +53,7 @@ Run `/usage-band-plus-preview` to see the band in every terminal style side by s
 - The 5h / 7d figures come from your subscription's rate-limit headers, so they appear after the first response of a session and only on a subscription.
 - The cache hit rate is the last turn's cache reads over all its input (uncached + cache reads + cache writes), summed over the turn's requests.
 - Git is read with `git status` at session start, after each turn, after a Bash, Edit, Write or NotebookEdit call, and every minute. Outside a repository the git group is hidden.
-- The todo list is built from the `TodoWrite`, `TaskCreate` and `TaskUpdate` calls the mod sees, subagents' included. Tasks made before the mod loaded appear once they are updated.
+- The todo list is built from the `TodoWrite`, `TaskCreate` and `TaskUpdate` calls the mod sees, subagents' included, and from the desktop app's own plan tool. Tasks made before the mod loaded appear once they are updated.
 - If the original `usage-band` is also installed, turn it off, or both bands draw.
 - The desktop text uses Inter when it is installed and falls back to SF Pro / the system UI font.
 

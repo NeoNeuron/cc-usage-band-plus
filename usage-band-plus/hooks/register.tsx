@@ -185,11 +185,33 @@ export const parseGitStatus = (stdout: string): Git => {
 }
 
 type Loose = Record<string, unknown>
+const PLAN_TOOL = 'mcp__ccd_turn__update_plan'
+const WRAP_UP_TOOL = 'mcp__ccd_turn__wrap_up'
+const isPlanStep = (t: Todo) => t.id.startsWith('plan:')
+const finishPlanStep = (list: readonly Todo[]): Todo[] =>
+  list.map(t => (isPlanStep(t) && t.status === 'in_progress' ? { ...t, status: 'completed' } : t))
 const isStatus = (v: unknown): v is Todo['status'] => v === 'pending' || v === 'in_progress' || v === 'completed'
 
 // The list after one answered TodoWrite, TaskCreate or TaskUpdate call; the same list when the
 // call changed nothing the band shows
 export const applyTodoCall = (list: readonly Todo[], tool: string, input: Loose, result: Loose): Todo[] => {
+  // The desktop app keeps its task list with a tool of its own: `items` lays the plan out,
+  // `advance` finishes the step in progress and starts the next, and the turn's wrap-up finishes
+  // the last one. Its steps carry `plan:` ids, so a wrap-up never closes a task of the other tools.
+  if (tool === PLAN_TOOL) {
+    if (Array.isArray(input.items)) {
+      return (input.items as Loose[]).map((t, i) => ({
+        id: `plan:${i}`,
+        subject: String(t.content ?? ''),
+        status: isStatus(t.status) ? t.status : 'pending',
+      }))
+    }
+    if (input.advance !== true || !list.some(isPlanStep)) return [...list]
+    const next = finishPlanStep(list)
+    const up = next.findIndex(t => isPlanStep(t) && t.status === 'pending')
+    return next.map((t, i) => (i === up ? { ...t, status: 'in_progress' } : t))
+  }
+  if (tool === WRAP_UP_TOOL) return finishPlanStep(list)
   if (tool === 'TodoWrite') {
     const next = Array.isArray(result.newTodos) ? (result.newTodos as Loose[]) : []
     return next.map((t, i) => ({ id: String(i), subject: String(t.content ?? ''), status: isStatus(t.status) ? t.status : 'pending' }))
@@ -756,12 +778,13 @@ export const register: Register = on => {
   })
 
   // Subagents write the session's task list too, so their calls count
-  on('tool.call', { tool: ['TodoWrite', 'TaskCreate', 'TaskUpdate'] }, async ($, e, next) => {
+  on('tool.call', { tool: ['TodoWrite', 'TaskCreate', 'TaskUpdate', PLAN_TOOL, WRAP_UP_TOOL] }, async ($, e, next) => {
     const ran = await next(e)
     // The call has run: nothing here may fail the hook and have it answered again
     try {
-      if (ran.deny === undefined && ran.isError !== true && ran.result) {
-        await recordTodoCall($, e.tool, e as Loose, ran.result as Loose)
+      if (ran.deny === undefined && ran.isError !== true) {
+        const result = ran.result && typeof ran.result === 'object' ? (ran.result as Loose) : {}
+        await recordTodoCall($, e.tool, e as Loose, result)
       }
     } catch {
       // The band keeps the list it had
