@@ -167,7 +167,11 @@ claude plugin test .
 
 **桌面端，浅色模式**
 
-<img src="docs/images/desktop-light-app.png" alt="usage-band-plus 在桌面端的浅色模式效果" width="760">
+<img src="docs/images/desktop-light-app.png" alt="usage-band-plus 在桌面端的浅色模式效果，有任务正在进行" width="760">
+
+所有任务完成后，待办一栏变成绿色的对勾：
+
+<img src="docs/images/desktop-light-done.png" alt="usage-band-plus 在桌面端的浅色模式效果，任务全部完成" width="760">
 
 **桌面端，深色模式**
 

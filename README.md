@@ -165,7 +165,11 @@ Issues and pull requests are welcome.
 
 **Desktop app, light mode**
 
-<img src="docs/images/desktop-light-app.png" alt="usage-band-plus in the desktop app, light mode" width="760">
+<img src="docs/images/desktop-light-app.png" alt="usage-band-plus in the desktop app, light mode, with a task in progress" width="760">
+
+Once every task is done, the todo group turns to a green tick:
+
+<img src="docs/images/desktop-light-done.png" alt="usage-band-plus in the desktop app, light mode, with all tasks done" width="760">
 
 **Desktop app, dark mode**
 
