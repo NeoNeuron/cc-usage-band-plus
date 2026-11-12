@@ -492,6 +492,26 @@ export const desktopSvg = (m: Measure | null, t: TurnTokens | null, at: number) 
   return { svg: wrap(width, body.join('')), width, height: D.h }
 }
 
+// The info row on the desktop: one line of text in an SVG of its own, so each part keeps its
+// color and, like the usage row, turns deeper on a light background and lighter on a dark one.
+// The text is centred in a box cut a little wide, since its real width is the font's to decide.
+const INFO = { h: 20, size: 12, base: 14 }
+export const infoSvg = (i: Info, g: Git | null, list: readonly Todo[]) => {
+  const spans = infoLayout(i, g, list)
+  const text = spans.map(sp => sp.text).join('')
+  const width = Math.ceil(textW(text, INFO.size) * 1.15) + 16
+  const runs = spans
+    .map(sp =>
+      sp.color
+        ? `<tspan class="ink" style="--l:${lighten(sp.color, -0.38)};--d:${lighten(sp.color, 0.25)}">${esc(sp.text)}</tspan>`
+        : `<tspan class="mute">${esc(sp.text)}</tspan>`,
+    )
+    .join('')
+  const body = `<text x="${width / 2}" y="${INFO.base}" font-size="${INFO.size}" text-anchor="middle" xml:space="preserve">${runs}</text>`
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${INFO.h}" viewBox="0 0 ${width} ${INFO.h}" style="color-scheme:light dark;background:transparent">${SVG_HEAD}${body}</svg>`
+  return { svg, width, height: INFO.h, alt: text }
+}
+
 export const describe = (
   m: Measure | null,
   t: TurnTokens | null,
@@ -816,13 +836,14 @@ export const register: Register = on => {
 
     // Desktop and mobile animate inside the SVG, so they never read the frame counter
     if (e.surface === 'desktop' || e.surface === 'mobile') {
-      const { Box, Svg, Text } = $.ui.resolve(e)
+      const { Box, Svg } = $.ui.resolve(e)
       const { svg, width, height } = desktopSvg(m, t, at)
+      const row = infoSvg(i, g, list)
       return (
         <Box flexDirection="column" flexGrow={1} paddingX={1}>
           {hasInfo && (
             <Box flexDirection="row" justifyContent="center">
-              <Text dimColor>{infoText(i, g, list)}</Text>
+              <Svg source={row.svg} alt={row.alt} width={row.width} height={row.height} />
             </Box>
           )}
           {hasUsage && (

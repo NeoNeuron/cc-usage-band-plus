@@ -31,7 +31,7 @@ Each row fits itself to the terminal width. The usage row drops the bars first, 
 
 **Desktop app (Code tab)**
 
-The info row as one centered line of text, over a centered row drawn as SVG: limit bars with the figure and reset time beside them, the context window as a 2×10 dot matrix (each dot is 5% of the window), and the cache hit rate. Hairlines separate the groups. It follows the app's light and dark mode.
+The info row as one centered line, each part in its own color, over a centered row drawn as SVG: limit bars with the figure and reset time beside them, the context window as a 2×10 dot matrix (each dot is 5% of the window), and the cache hit rate. Hairlines separate the groups. It follows the app's light and dark mode.
 
 ## Install
 

@@ -1,6 +1,6 @@
 {
   "name": "usage-band-plus",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A two-row band above the prompt: model, effort, git status and todo progress over your 5-hour and 7-day limits, context window and prompt-cache hit rate. A fork of usage-band (github.com/JetsonChan/CC-Usage-Band), originally written by Jetson Chan",
   "author": {
     "name": "Kai Chen"

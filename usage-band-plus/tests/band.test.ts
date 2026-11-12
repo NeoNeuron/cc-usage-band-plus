@@ -11,6 +11,7 @@ import {
   fmtTokens,
   hitRate,
   infoLayout,
+  infoSvg,
   infoText,
   layout,
   modelEffort,
@@ -355,7 +356,11 @@ test('a session fills the info row: model and effort, git on a timer, todos from
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const text = async (surface: 'terminal' | 'desktop' | 'mobile' | 'vscode') => {
     const ui = await $.ui.mount({ plugin: 'usage-band-plus', surface, ...BAND })
-    const all = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
+    // Desktop and mobile draw the row as an image: its alt text carries the words
+    const drawn = surface === 'desktop' || surface === 'mobile'
+    const all = drawn
+      ? String((await ui.findAll({ type: 'Svg' }))[0]?.props.alt)
+      : (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
     await ui.unmount()
     return all
   }
@@ -368,7 +373,7 @@ test('a session fills the info row: model and effort, git on a timer, todos from
   await $.tool.call({ tool: 'TaskCreate', subject: 'Fix the bug', description: 'It is broken' })
   await $.tool.call({ tool: 'TaskUpdate', taskId: '7', status: 'in_progress' })
   expect(await text('terminal')).toContain('▸ Fix the bug (0/1)')
-  // The desktop draws the same row as one line of text over the SVG
+  // The desktop draws the same row as an image over the usage row
   expect(await text('desktop')).toBe('Opus 5.5 · high  git:(main* ✗1 !2 +3 ?2 ↑1 ↓2)  ▸ Fix the bug (0/1)')
 
   expect(await text('mobile')).toBe(await text('desktop'))
@@ -394,7 +399,7 @@ test('a session fills the info row: model and effort, git on a timer, todos from
 
   // The desktop image's alt text says the row too
   const desk = await $.ui.mount({ plugin: 'usage-band-plus', surface: 'desktop', ...BAND })
-  expect((await desk.find({ type: 'Svg' }))?.props.alt).toBe(
+  expect((await desk.findAll({ type: 'Svg' }))[1]?.props.alt).toBe(
     'model Haiku 5.5, git branch main: 1 in conflict, 2 modified, 3 staged, 2 untracked, 1 ahead, 2 behind, 0 of 1 todos done, now: Fix the bug, context 1K of 1M',
   )
   await desk.unmount()
@@ -465,4 +470,22 @@ test('the effort saved for a model wins over the session-wide one', async ($, on
   const ui = await $.ui.mount({ plugin: 'usage-band-plus', surface: 'terminal', ...BAND })
   expect(await ui.find({ type: 'Text', text: ' · low' })).toBeDefined()
   await ui.unmount()
+})
+
+test('the desktop info row keeps each part in its color, in both color schemes', async () => {
+  const { svg, width, height, alt } = infoSvg({ model: 'claude-opus-5-5', effort: 'high' }, GIT, TODOS)
+  expect(alt).toBe('Opus 5.5 · high  git:(main* !2 +1 ?3 ↑1)  ▸ Fix the bug (1/3)')
+  // Model and branch, the git frame, the counts and the todo: each tinted for light and for dark
+  expect(svg).toContain('<tspan class="ink" style="--l:#397a85;--d:#85d3e0">Opus 5.5</tspan>')
+  expect(svg.match(/class="ink"/g)?.length).toBe(6)
+  // Effort and the todo count stay quiet
+  expect(svg).toContain('<tspan class="mute"> · high</tspan>')
+  expect(svg).toContain('<tspan class="mute">(1/3)</tspan>')
+  expect(svg).toContain('prefers-color-scheme:dark')
+  expect(svg).toContain('xml:space="preserve"')
+  expect(svg).not.toContain('<animate')
+  expect(height).toBe(20)
+  expect(width).toBeGreaterThan(300)
+  // What is drawn is escaped
+  expect(infoSvg({ model: null, effort: null }, { ...GIT, branch: 'a<b&c' }, []).svg).toContain('a&lt;b&amp;c*')
 })
