@@ -165,8 +165,6 @@ claude plugin test .
 
 ## 截图
 
-截图里是原版 usage-band 的用量行；信息行显示在它的上方。
-
 **桌面端，浅色模式**
 
 <img src="docs/images/desktop-light-app.png" alt="usage-band-plus 在桌面端的浅色模式效果" width="760">
@@ -175,9 +173,11 @@ claude plugin test .
 
 <img src="docs/images/desktop-dark.png" alt="usage-band-plus 在桌面端的深色模式效果" width="760">
 
-**终端**（Ghostty）：宽度不够时会先去掉进度条，再去掉重置时间。运行 `/usage-band-plus-preview` 可以并排对比所有终端样式。
+**终端**（Ghostty），深色和浅色主题：宽度不够时会先去掉进度条，再去掉重置时间。运行 `/usage-band-plus-preview` 可以并排对比所有终端样式。
 
-<img src="docs/images/terminal.png" alt="usage-band-plus 在终端里的效果" width="760">
+<img src="docs/images/terminal.png" alt="usage-band-plus 在终端里的效果（深色主题）" width="760">
+
+<img src="docs/images/terminal-light.png" alt="usage-band-plus 在终端里的效果（浅色主题）" width="760">
 
 ## 许可证
 

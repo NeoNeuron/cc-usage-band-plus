@@ -11,7 +11,7 @@
 
 English · [简体中文](./README.zh-CN.md)
 
-<img src="docs/images/banner.png" alt="usage-band-plus in the Claude Code desktop app (top) and in a terminal (bottom)" width="760">
+<img src="docs/images/banner.png" alt="usage-band-plus in the Claude Code desktop app (top) and in a terminal (bottom): the info row over the usage row" width="760">
 
 </div>
 
@@ -163,8 +163,6 @@ Issues and pull requests are welcome.
 
 ## Screenshots
 
-These show the usage row as the original usage-band draws it; the info row sits above it.
-
 **Desktop app, light mode**
 
 <img src="docs/images/desktop-light-app.png" alt="usage-band-plus in the desktop app, light mode" width="760">
@@ -173,9 +171,11 @@ These show the usage row as the original usage-band draws it; the info row sits 
 
 <img src="docs/images/desktop-dark.png" alt="usage-band-plus in the desktop app, dark mode" width="760">
 
-**Terminal** (Ghostty). Narrow terminals drop the bars first, then the reset times. Run `/usage-band-plus-preview` to see every terminal style side by side.
+**Terminal** (Ghostty), dark and light. Narrow terminals drop the bars first, then the reset times. Run `/usage-band-plus-preview` to see every terminal style side by side.
 
-<img src="docs/images/terminal.png" alt="usage-band-plus in a terminal" width="760">
+<img src="docs/images/terminal.png" alt="usage-band-plus in a terminal, dark theme" width="760">
+
+<img src="docs/images/terminal-light.png" alt="usage-band-plus in a terminal, light theme" width="760">
 
 ## License
 
