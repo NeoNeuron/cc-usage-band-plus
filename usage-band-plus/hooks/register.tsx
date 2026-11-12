@@ -1,20 +1,26 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Limit, Measure, Style, TurnTokens } from '../types'
+import type { Git, Info, Limit, Measure, Style, Todo, TurnTokens } from '../types'
 
-const measure = atom({ plugin: 'usage-band', key: 'measure' } as const, null)
-const turn = atom({ plugin: 'usage-band', key: 'turn' } as const, null)
-const now = atom({ plugin: 'usage-band', key: 'now' } as const, 0)
-const phase = atom({ plugin: 'usage-band', key: 'phase' } as const, 0)
-const style = atom({ plugin: 'usage-band', key: 'style' } as const, 'unicode')
+const measure = atom({ plugin: 'usage-band-plus', key: 'measure' } as const, null)
+const turn = atom({ plugin: 'usage-band-plus', key: 'turn' } as const, null)
+const now = atom({ plugin: 'usage-band-plus', key: 'now' } as const, 0)
+const phase = atom({ plugin: 'usage-band-plus', key: 'phase' } as const, 0)
+const style = atom({ plugin: 'usage-band-plus', key: 'style' } as const, 'unicode')
+const info = atom({ plugin: 'usage-band-plus', key: 'info' } as const, { model: null, effort: null })
+const git = atom({ plugin: 'usage-band-plus', key: 'git' } as const, null)
+const todos = atom({ plugin: 'usage-band-plus', key: 'todos' } as const, [])
+const session = atom({ plugin: 'usage-band-plus', key: 'session' } as const, null)
 
 // One hue per metric; RED takes over only when a metric is in trouble
 const HUE = { five: '#5cc4d6', seven: '#e8a25f', ctx: '#9aa5f5', cache: '#72cf9f' }
+// The info row: model and branch in cyan, the git frame in magenta, todos amber until all are done
+const TINT = { name: '#9aa5f5', model: '#5cc4d6', git: '#c792ea', branch: '#5cc4d6', stat: '#e8a25f', doing: '#e8a25f', done: '#72cf9f' }
 const RED = '#e5685f'
 const TRACK = '#4a4f5c'
 const FRAME_MS = 200
-const PREVIEW = 'usage-band-preview'
+const PREVIEW = 'usage-band-plus-preview'
 
 export const GLYPHS: Record<Style, { ctx: string; hit: string; fill: string; track: string }> = {
   nerd: { ctx: '\u{F0328} ', hit: '\u{F04FE} ', fill: '■', track: '■' },
@@ -149,6 +155,158 @@ const fit = (m: Measure | null, t: TurnTokens | null, at: number, cols: number, 
   ([2, 1, 0] as const).map(d => layout(m, t, at, d, frame, look)).find(s => width(s) <= cols) ??
   layout(m, t, at, 0, frame, look)
 
+// ---- The info row: model · effort, git status, todo progress
+
+// `claude-opus-5-5` reads `Opus 5.5`; a name `/model` already made readable is kept
+export const fmtModel = (raw: string): string => {
+  const m = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?(?:\[(\w+)\])?$/.exec(raw.trim())
+  if (!m) return raw.trim()
+  const [, family = '', major, minor, variant] = m
+  return `${family[0]!.toUpperCase()}${family.slice(1)} ${major}${minor ? `.${minor}` : ''}${variant ? ` ${variant.toUpperCase()}` : ''}`
+}
+
+// Reads `git status --porcelain=v2 --branch`
+export const parseGitStatus = (stdout: string): Git => {
+  const g: Git = { branch: '', modified: 0, staged: 0, untracked: 0, conflicts: 0, ahead: 0, behind: 0 }
+  let oid = ''
+  for (const line of stdout.split('\n')) {
+    if (line.startsWith('# branch.oid ')) oid = line.slice(13).trim()
+    else if (line.startsWith('# branch.head ')) g.branch = line.slice(14).trim()
+    else if (line.startsWith('# branch.ab ')) {
+      const ab = /\+(\d+) -(\d+)/.exec(line)
+      if (ab) [g.ahead, g.behind] = [Number(ab[1]), Number(ab[2])]
+    } else if (line.startsWith('1 ') || line.startsWith('2 ')) {
+      if (line[2] !== '.') g.staged++
+      if (line[3] !== '.') g.modified++
+    } else if (line.startsWith('u ')) g.conflicts++
+    else if (line.startsWith('? ')) g.untracked++
+  }
+  if (g.branch === '(detached)') g.branch = /^[0-9a-f]{7,}$/.test(oid) ? oid.slice(0, 7) : 'detached'
+  return g
+}
+
+type Loose = Record<string, unknown>
+const isStatus = (v: unknown): v is Todo['status'] => v === 'pending' || v === 'in_progress' || v === 'completed'
+
+// The list after one answered TodoWrite, TaskCreate or TaskUpdate call; the same list when the
+// call changed nothing the band shows
+export const applyTodoCall = (list: readonly Todo[], tool: string, input: Loose, result: Loose): Todo[] => {
+  if (tool === 'TodoWrite') {
+    const next = Array.isArray(result.newTodos) ? (result.newTodos as Loose[]) : []
+    return next.map((t, i) => ({ id: String(i), subject: String(t.content ?? ''), status: isStatus(t.status) ? t.status : 'pending' }))
+  }
+  if (tool === 'TaskCreate') {
+    const task = result.task as Loose | undefined
+    if (!task || task.id === undefined) return [...list]
+    const made: Todo = { id: String(task.id), subject: String(task.subject ?? input.subject ?? ''), status: 'pending' }
+    return [...list.filter(t => t.id !== made.id), made]
+  }
+  if (tool === 'TaskUpdate' && result.success === true) {
+    const id = String(result.taskId ?? input.taskId)
+    if (input.status === 'deleted') return list.filter(t => t.id !== id)
+    // A task made before the mod loaded is first heard of here
+    const known = list.find(t => t.id === id) ?? { id, subject: `#${id}`, status: 'pending' as const }
+    const next: Todo = {
+      id,
+      subject: typeof input.subject === 'string' ? input.subject : known.subject,
+      status: isStatus(input.status) ? input.status : known.status,
+    }
+    return list.some(t => t.id === id) ? list.map(t => (t.id === id ? next : t)) : [...list, next]
+  }
+  return [...list]
+}
+
+const SUBJECT_MAX = 40
+const NAME_MAX = 32
+const clip = (v: string, max: number, more: string) => {
+  const chars = [...v]
+  return chars.length > max ? `${chars.slice(0, max - 1).join('')}${more}` : v
+}
+const MARKS: Record<Style, { doing: string; done: string; up: string; down: string; more: string }> = {
+  nerd: { doing: '▸', done: '✓', up: '↑', down: '↓', more: '…' },
+  unicode: { doing: '▸', done: '✓', up: '↑', down: '↓', more: '…' },
+  ascii: { doing: '>', done: 'ok', up: '^', down: 'v', more: '...' },
+}
+
+// drop 0: everything; 1: no todo subject; 2: no ahead/behind; 3: no file counts; 4: no effort;
+// 5: no session name
+export const infoLayout = (
+  i: Info,
+  g: Git | null,
+  list: readonly Todo[],
+  drop: 0 | 1 | 2 | 3 | 4 | 5 = 0,
+  look: Look = { style: 'unicode', colors: 'true' },
+  name: string | null = null,
+): Span[] => {
+  const k = MARKS[look.style]
+  const groups: Span[][] = []
+
+  if (name && drop < 5) groups.push([{ text: clip(name, NAME_MAX, k.more), color: TINT.name }])
+
+  if (i.model) {
+    const out: Span[] = [{ text: fmtModel(i.model), color: TINT.model }]
+    if (i.effort && drop < 4) out.push({ text: ` · ${i.effort}`, dim: true })
+    groups.push(out)
+  }
+
+  if (g) {
+    const isDirty = g.modified + g.staged + g.untracked + g.conflicts > 0
+    const stats: string[] = []
+    if (drop < 3) {
+      if (g.conflicts) stats.push(`✗${g.conflicts}`.replace('✗', look.style === 'ascii' ? 'x' : '✗'))
+      if (g.modified) stats.push(`!${g.modified}`)
+      if (g.staged) stats.push(`+${g.staged}`)
+      if (g.untracked) stats.push(`?${g.untracked}`)
+    }
+    if (drop < 2) {
+      if (g.ahead) stats.push(`${k.up}${g.ahead}`)
+      if (g.behind) stats.push(`${k.down}${g.behind}`)
+    }
+    const out: Span[] = [
+      { text: 'git:(', color: TINT.git },
+      { text: `${g.branch}${isDirty ? '*' : ''}`, color: TINT.branch },
+    ]
+    if (stats.length) out.push({ text: ` ${stats.join(' ')}`, color: TINT.stat })
+    out.push({ text: ')', color: TINT.git })
+    groups.push(out)
+  }
+
+  if (list.length) {
+    const done = list.filter(t => t.status === 'completed').length
+    const doing = list.find(t => t.status === 'in_progress')
+    const count = `(${done}/${list.length})`
+    if (doing) {
+      const subject = clip(doing.subject, SUBJECT_MAX, k.more)
+      groups.push([
+        { text: drop < 1 && subject ? `${k.doing} ${subject} ` : `${k.doing} `, color: TINT.doing },
+        { text: count, dim: true },
+      ])
+    } else if (done === list.length) {
+      groups.push([{ text: `${k.done} ${done}/${list.length}`, color: TINT.done }])
+    } else {
+      groups.push([{ text: `${done}/${list.length} todos`, dim: true }])
+    }
+  }
+
+  const spans = groups.flatMap((grp, n) => (n === 0 ? grp : [SEP, ...grp]))
+  return look.colors === '256' ? spans.map(s => (s.color ? { ...s, color: to256(s.color) } : s)) : spans
+}
+
+export const fitInfo = (
+  i: Info,
+  g: Git | null,
+  list: readonly Todo[],
+  cols: number,
+  look: Look,
+  name: string | null = null,
+): Span[] =>
+  ([0, 1, 2, 3, 4, 5] as const).map(d => infoLayout(i, g, list, d, look, name)).find(s => width(s) <= cols) ??
+  infoLayout(i, g, list, 5, look, name)
+
+export const infoText = (i: Info, g: Git | null, list: readonly Todo[], name: string | null = null) =>
+  infoLayout(i, g, list, 0, undefined, name)
+    .map(s => s.text)
+    .join('')
 
 // ---- Desktop: the band is one SVG drawn as a plain image. The SMIL shine runs in an image too,
 // and an image redraws in place, where an interactive (framed) SVG reloads its frame and blinks
@@ -341,8 +499,33 @@ export const desktopSvg = (m: Measure | null, t: TurnTokens | null, at: number) 
   return { svg: wrap(width, body.join('')), width, height: D.h }
 }
 
-export const describe = (m: Measure | null, t: TurnTokens | null) => {
+export const describe = (
+  m: Measure | null,
+  t: TurnTokens | null,
+  i: Info = { model: null, effort: null },
+  g: Git | null = null,
+  list: readonly Todo[] = [],
+  name: string | null = null,
+) => {
   const parts: string[] = []
+  if (name) parts.push(`session ${name}`)
+  if (i.model) parts.push(`model ${fmtModel(i.model)}${i.effort ? `, effort ${i.effort}` : ''}`)
+  if (g) {
+    const counts = [
+      g.conflicts && `${g.conflicts} in conflict`,
+      g.modified && `${g.modified} modified`,
+      g.staged && `${g.staged} staged`,
+      g.untracked && `${g.untracked} untracked`,
+      g.ahead && `${g.ahead} ahead`,
+      g.behind && `${g.behind} behind`,
+    ].filter(Boolean)
+    parts.push(`git branch ${g.branch}${counts.length ? `: ${counts.join(', ')}` : ', clean'}`)
+  }
+  if (list.length) {
+    const doing = list.find(x => x.status === 'in_progress')
+    const done = list.filter(x => x.status === 'completed').length
+    parts.push(`${done} of ${list.length} todos done${doing ? `, now: ${doing.subject}` : ''}`)
+  }
   for (const l of m?.rateLimits ?? []) {
     if (l.kind === 'five_hour') parts.push(`5-hour limit ${Math.round(l.percentUsed)}% used`)
     if (l.kind === 'seven_day') parts.push(`7-day limit ${Math.round(l.percentUsed)}% used`)
@@ -377,6 +560,118 @@ const setTurn = async ($: EngineInterface, next: TurnTokens) => {
   await update($, turn, () => next)
 }
 
+// The info row's values are written only when they differ, for the same reason
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+
+const setInfo = async ($: EngineInterface, patch: Partial<Info>) => {
+  const was = await read($, info)
+  const next = { ...was, ...patch }
+  if (!same(was, next)) await update($, info, () => next)
+}
+
+const GIT_STATUS = ['git', '--no-optional-locks', 'status', '--porcelain=v2', '--branch'] as const
+
+const refreshGit = async ($: EngineInterface) => {
+  let next: Git | null = null
+  try {
+    const ran = await $.process.run(GIT_STATUS, { timeoutMs: 3000 })
+    if (ran.exitCode === 0) next = parseGitStatus(ran.stdout)
+  } catch {
+    // No git, or it ran past the timeout: the band shows no git group
+  }
+  if (!same(await read($, git), next)) await update($, git, () => next)
+}
+
+// Calls the model made together answer together: each is applied to the list the one before
+// left, never to a list read before that one wrote
+let todoWrites: Promise<void> = Promise.resolve()
+const recordTodoCall = ($: EngineInterface, tool: string, input: Loose, result: Loose) => {
+  todoWrites = todoWrites
+    .catch(() => {})
+    .then(async () => {
+      const was = await read($, todos)
+      const list = applyTodoCall(was, tool, input, result)
+      if (!same(was, list)) await update($, todos, () => list)
+    })
+  return todoWrites
+}
+
+// Claude Code keeps one small record per running session, `<pid>.json` under its config folder's
+// `sessions`, holding the session's id and its name (given by /rename, written by the model, or
+// made from the folder). `$` has no call for the name, so it is read from there.
+export const sessionNameIn = (text: string, id: string): string | null | undefined => {
+  try {
+    const rec = JSON.parse(text) as Loose
+    if (rec.sessionId !== id) return undefined
+    return typeof rec.name === 'string' && rec.name.trim() ? rec.name.trim() : null
+  } catch {
+    return undefined
+  }
+}
+
+// The record that was this session's last time, tried first
+let recordPath: string | null = null
+const refreshName = async ($: EngineInterface) => {
+  let next: string | null = null
+  try {
+    const home = await $.env.get('HOME')
+    const root = (await $.env.get('CLAUDE_CONFIG_DIR')) || (home ? `${home}/.claude` : '')
+    if (!root) return
+    const id = await $.session.id()
+    const dir = `${root}/sessions`
+    const own = recordPath ? sessionNameIn(await $.fs.read(recordPath), id) : undefined
+    if (own !== undefined) next = own
+    else {
+      recordPath = null
+      for (const entry of await $.fs.list(dir)) {
+        if (entry.kind !== 'file' || !entry.name.endsWith('.json') || entry.size > 65_536) continue
+        const found = sessionNameIn(await $.fs.read(`${dir}/${entry.name}`), id)
+        if (found === undefined) continue
+        recordPath = `${dir}/${entry.name}`
+        next = found
+        break
+      }
+    }
+  } catch {
+    // No record to read: the band shows no name
+    recordPath = null
+  }
+  if ((await read($, session)) !== next) await update($, session, () => next)
+}
+
+const EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
+const asEffort = (v: unknown): string | null => {
+  if (typeof v === 'number') return String(v)
+  const s = typeof v === 'string' ? v.trim().toLowerCase() : ''
+  return EFFORTS.has(s) ? s : null
+}
+
+const GIT_DEBOUNCE_MS = 500
+
+// One git run at a time: calls that arrive while one is waiting or running fold into one more.
+// A reload starts these over with the module.
+let isGitQueued = false
+let isGitRunning = false
+const scheduleGit = ($: EngineInterface) => {
+  if (isGitQueued) return
+  isGitQueued = true
+  $.clock.after(GIT_DEBOUNCE_MS, () => {
+    void (async () => {
+      if (isGitRunning) {
+        isGitQueued = false
+        return scheduleGit($)
+      }
+      isGitQueued = false
+      isGitRunning = true
+      try {
+        await refreshGit($)
+      } finally {
+        isGitRunning = false
+      }
+    })()
+  })
+}
+
 // Shown by the preview when the session has no reading yet
 const SAMPLE_MEASURE: Measure = {
   context: { tokens: 176_000, window: 1_000_000, percent: 18 },
@@ -386,6 +681,14 @@ const SAMPLE_MEASURE: Measure = {
   ],
 }
 const SAMPLE_TURN: TurnTokens = { input: 900, output: 2_000, cacheRead: 170_000, cacheWrite: 1_000 }
+const SAMPLE_NAME = 'fix-login-bug'
+const SAMPLE_INFO: Info = { model: 'claude-opus-5-5', effort: 'high' }
+const SAMPLE_GIT: Git = { branch: 'main', modified: 2, staged: 1, untracked: 3, conflicts: 0, ahead: 1, behind: 0 }
+const SAMPLE_TODOS: Todo[] = [
+  { id: '1', subject: 'Read the code', status: 'completed' },
+  { id: '2', subject: 'Fix the bug', status: 'in_progress' },
+  { id: '3', subject: 'Run the tests', status: 'pending' },
+]
 
 const PROFILES: { name: string; look: Look }[] = [
   { name: 'Ghostty', look: { style: 'nerd', colors: 'true' } },
@@ -399,7 +702,7 @@ const PROFILES: { name: string; look: Look }[] = [
 const ICONS_ENV = 'USAGE_BAND_ICONS'
 
 export const WELCOME =
-  'usage-band is on: your 5h and 7d limits, context window and cache hit rate now show above the prompt. ' +
+  'usage-band-plus is on: model, effort, git status and todos, over your 5h and 7d limits, context window and cache hit rate, now show above the prompt. ' +
   'The limits fill in after Claude’s first reply.'
 
 export const register: Register = on => {
@@ -407,7 +710,6 @@ export const register: Register = on => {
   // The terminal animates by redrawing; started by its first draw, so a desktop-only session
   // never runs it. A reload drops the timer and this flag together.
   let isAnimating = false
-
   on('session.start', async ($, e, next) => {
     const result = await next(e)
     setting = ((await $.env.get('USAGE_BAND_ICONS')) ?? 'auto').trim().toLowerCase() || 'auto'
@@ -427,7 +729,21 @@ export const register: Register = on => {
     await tick($)
     $.clock.every(60_000, () => {
       void tick($)
+      scheduleGit($)
+      // A rename shows within the minute, or when the turn ends
+      void refreshName($)
     })
+    await refreshName($)
+    scheduleGit($)
+    // The first step of a turn brings the model and effort in force; until then, what the session
+    // is set to. A read that fails leaves the row to that first step.
+    try {
+      const effort =
+        asEffort(await $.settings.read({ key: 'effortLevel' })) ?? asEffort(await $.env.get('CLAUDE_CODE_EFFORT_LEVEL'))
+      await setInfo($, { model: await $.session.model(), ...(effort ? { effort } : {}) })
+    } catch {
+      // Shown from the first step on
+    }
     return result
   })
 
@@ -452,11 +768,46 @@ export const register: Register = on => {
         cacheWrite: u.cache_creation_input_tokens,
       })
     }
+    if (e.agentId === undefined) {
+      scheduleGit($)
+      await refreshName($)
+    }
     return next(e)
   })
 
+  // Main loop only: the model and effort each request goes out with
+  on('turn.step', async function* ($, e, next) {
+    if (e.agentId === undefined) await setInfo($, { model: e.model, effort: asEffort(e.effort) })
+    return yield* next(e)
+  })
+
+  // Subagents write the session's task list too, so their calls count
+  on('tool.call', { tool: ['TodoWrite', 'TaskCreate', 'TaskUpdate'] }, async ($, e, next) => {
+    const ran = await next(e)
+    // The call has run: nothing here may fail the hook and have it answered again
+    try {
+      if (ran.deny === undefined && ran.isError !== true && ran.result) {
+        await recordTodoCall($, e.tool, e as Loose, ran.result as Loose)
+      }
+    } catch {
+      // The band keeps the list it had
+    }
+    return ran
+  })
+
+  // Tools that can change the working tree
+  on('tool.call', { tool: ['Bash', 'Edit', 'Write', 'NotebookEdit'] }, async ($, e, next) => {
+    const ran = await next(e)
+    try {
+      scheduleGit($)
+    } catch {
+      // The next timer tick reads git instead
+    }
+    return ran
+  })
+
   on('command.run', { command: PREVIEW }, async () => ({
-    text: `usage-band style preview (${ICONS_ENV}: ${setting})`,
+    text: `usage-band-plus style preview (${ICONS_ENV}: ${setting})`,
   }))
 
   on('ui.render', { component: 'CommandOutput', props: { command: PREVIEW } }, async ($, e) => {
@@ -464,6 +815,12 @@ export const register: Register = on => {
     const t = (await read($, turn)) ?? SAMPLE_TURN
     const at = await read($, now)
     const current = await read($, style)
+    const i = await read($, info)
+    const shownInfo = i.model ? i : SAMPLE_INFO
+    const g = (await read($, git)) ?? SAMPLE_GIT
+    const list = await read($, todos)
+    const shownTodos = list.length ? list : SAMPLE_TODOS
+    const name = (await read($, session)) ?? SAMPLE_NAME
     const { Box, Text } = $.ui.resolve(e)
     return (
       <Box flexDirection="column">
@@ -473,6 +830,13 @@ export const register: Register = on => {
         {PROFILES.map(p => (
           <Box key={p.name} flexDirection="column" marginTop={1}>
             <Text dimColor>{p.name}</Text>
+            <Box flexDirection="row">
+              {infoLayout(shownInfo, g, shownTodos, 0, p.look, name).map((s, n) => (
+                <Text key={`i${n}`} color={s.color} dimColor={s.dim}>
+                  {s.text}
+                </Text>
+              ))}
+            </Box>
             <Box flexDirection="row">
               {layout(m, t, at, 2, 3, p.look).map((s, i) => (
                 <Text key={`s${i}`} color={s.color} dimColor={s.dim}>
@@ -490,15 +854,30 @@ export const register: Register = on => {
     const m = await read($, measure)
     const t = await read($, turn)
     const at = await read($, now)
-    if (e.props.hasSurvey || (m === null && t === null)) return next(e)
+    const i = await read($, info)
+    const g = await read($, git)
+    const list = await read($, todos)
+    const name = await read($, session)
+    const hasUsage = m !== null || t !== null
+    const hasInfo = name !== null || i.model !== null || g !== null || list.length > 0
+    if (e.props.hasSurvey || (!hasUsage && !hasInfo)) return next(e)
 
     // Desktop and mobile animate inside the SVG, so they never read the frame counter
     if (e.surface === 'desktop' || e.surface === 'mobile') {
-      const { Box, Svg } = $.ui.resolve(e)
+      const { Box, Svg, Text } = $.ui.resolve(e)
       const { svg, width, height } = desktopSvg(m, t, at)
       return (
-        <Box flexDirection="row" justifyContent="center" flexGrow={1} paddingX={1}>
-          <Svg source={svg} alt={describe(m, t)} width={width} height={height} />
+        <Box flexDirection="column" flexGrow={1} paddingX={1}>
+          {hasInfo && (
+            <Box flexDirection="row" justifyContent="center">
+              <Text dimColor>{infoText(i, g, list, name)}</Text>
+            </Box>
+          )}
+          {hasUsage && (
+            <Box flexDirection="row" justifyContent="center">
+              <Svg source={svg} alt={describe(m, t, i, g, list, name)} width={width} height={height} />
+            </Box>
+          )}
         </Box>
       )
     }
@@ -512,14 +891,26 @@ export const register: Register = on => {
     const frame = await read($, phase)
     // The terminal font decides icons; other surfaces (vscode) get the plain set
     const s = e.surface === 'terminal' ? await read($, style) : 'unicode'
-    const spans = fit(m, t, at, e.props.bodyColumns - 2, frame, { style: s, colors: 'true' })
+    const look: Look = { style: s, colors: 'true' }
+    const cols = e.props.bodyColumns - 2
+    const rows = [
+      hasInfo ? fitInfo(i, g, list, cols, look, name) : [],
+      hasUsage ? fit(m, t, at, cols, frame, look) : [],
+    ]
+      .filter(r => r.length > 0)
+      // With room for one row, the usage row stays
+      .slice(-Math.max(1, e.props.maxRows))
     const { Box, Text } = $.ui.resolve(e)
     return (
-      <Box flexDirection="row" flexWrap="wrap" paddingX={1}>
-        {spans.map((sp, i) => (
-          <Text key={`s${i}`} color={sp.color} dimColor={sp.dim}>
-            {sp.text}
-          </Text>
+      <Box flexDirection="column" paddingX={1}>
+        {rows.map((spans, r) => (
+          <Box key={`r${r}`} flexDirection="row" flexWrap="wrap">
+            {spans.map((sp, n) => (
+              <Text key={`s${n}`} color={sp.color} dimColor={sp.dim}>
+                {sp.text}
+              </Text>
+            ))}
+          </Box>
         ))}
       </Box>
     )

@@ -1,17 +1,17 @@
 {
-  "name": "cc-usage-band",
+  "name": "cc-usage-band-plus",
   "owner": {
-    "name": "Jetson Chan"
+    "name": "Kai Chen"
   },
   "metadata": {
-    "description": "usage-band, a Claude Code mod by Jetson Chan"
+    "description": "usage-band-plus, a Claude Code mod by Kai Chen, forked from usage-band by Jetson Chan (original author)"
   },
   "plugins": [
     {
-      "name": "usage-band",
-      "source": "./usage-band",
-      "description": "5h/7d limits, context window and cache hit rate above the prompt, for the terminal and the desktop app",
-      "version": "1.0.6"
+      "name": "usage-band-plus",
+      "source": "./usage-band-plus",
+      "description": "Model, effort, git status and todo progress over the 5h/7d limits, context window and cache hit rate, above the prompt. A fork of usage-band, originally written by Jetson Chan",
+      "version": "0.1.0"
     }
   ]
 }

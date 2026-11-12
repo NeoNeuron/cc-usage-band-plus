@@ -1,27 +1,29 @@
 <div align="center">
 
-# CC-Usage-Band
+# CC-Usage-Band-Plus
 
-**额度、上下文、缓存命中率，在输入框上方一眼看清。**
+**模型、推理强度、git 状态、待办进度，加上额度、上下文、缓存命中率，在输入框上方一眼看清。**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](./LICENSE)
-[![Claude Code](https://img.shields.io/badge/Claude%20Code-2.1.287%2B-d97757?style=flat-square)](https://claude.com/claude-code)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-2.1.322%2B-d97757?style=flat-square)](https://claude.com/claude-code)
 [![Type: mod](https://img.shields.io/badge/type-mod-6f7be0?style=flat-square)](https://claude.com/blog/claude-code-mods)
 ![Surfaces](https://img.shields.io/badge/surfaces-terminal%20%7C%20desktop-5cc4d6?style=flat-square)
 
 [English](./README.md) · 简体中文
 
-<img src="docs/images/banner.png" alt="usage-band 在 Claude Code 桌面端（上）和终端（下）的效果" width="760">
+<img src="docs/images/banner.png" alt="usage-band-plus 在 Claude Code 桌面端（上）和终端（下）的效果" width="760">
 
 </div>
 
 ---
 
-`usage-band` 是一个 [Claude Code 模组（mod）](https://claude.com/blog/claude-code-mods)。它在输入框上方显示一行状态，包含工作时最值得留意的四个数据。终端和桌面端各有一套专门的布局，每一轮对话结束后自动更新，平时安静地待着，只在需要注意时才变红提醒你。
+`usage-band-plus` 是一个 [Claude Code 模组（mod）](https://claude.com/blog/claude-code-mods)。它在输入框上方显示两行状态：上面一行是会话当前的情况（模型、推理强度、git 状态、待办进度），下面一行是工作时最值得留意的四个数据。它是 Jetson Chan 的 [usage-band](https://github.com/JetsonChan/CC-Usage-Band) 的分支版本：下面一行来自原版，上面一行是这个分支新增的。终端和桌面端各有一套专门的布局，每一轮对话结束后自动更新，平时安静地待着，只在需要注意时才变红提醒你。
+
+> **分支声明：** usage-band-plus 是 [usage-band](https://github.com/JetsonChan/CC-Usage-Band) 的分支版本。原版由 **Jetson Chan** 创作，用量行（额度、上下文窗口、缓存命中率）、终端和桌面端的绘制以及预览命令都出自原作者。这个分支由 Kai Chen 维护，新增了信息行（模型、推理强度、git 状态、待办进度）。两者均采用 MIT 许可证。
 
 > **让 AI 助手帮你安装？** 让它运行[安装](#安装)里的两条命令即可。给 AI 助手的说明：安装成功后，用户只需要知道下面这段话：
 >
-> *usage-band 已安装。新开一个会话（或输入 `/reload-plugins`），输入框上方就会显示 5h 和 7d 额度、上下文窗口和缓存命中率。不需要任何配置。*
+> *usage-band-plus 已安装。新开一个会话（或输入 `/reload-plugins`），输入框上方就会显示模型、推理强度、git 状态和待办进度，以及 5h 和 7d 额度、上下文窗口和缓存命中率。不需要任何配置。*
 
 ## 目录
 
@@ -44,17 +46,20 @@
 | **7d** 额度 | 7 天额度的用量和重置时间 |
 | **上下文窗口**（图层图标） | 当前上下文占用的 token 数和模型窗口大小，例如 `398K/1M` |
 | **缓存命中率**（靶心图标） | 上一轮输入中有多少由提示缓存提供 |
+| **模型 · 推理强度** | 主循环使用的模型，以及请求发出时的推理强度，例如 `Opus 5.5 · high` |
+| **Git** | 分支名，工作区有改动时带 `*`，后面是计数：`✗` 冲突、`!` 已修改、`+` 已暂存、`?` 未跟踪、`↑` 领先、`↓` 落后，例如 `git:(main* !2 +1 ?3 ↑1)`。为零的计数不显示。 |
+| **待办** | 正在进行的任务和完成进度，例如 `▸ Fix the bug (2/5)`；全部完成后显示 `✓ 5/5` |
 
 - **一眼看清**：每项数据都有自己的颜色。只有在需要注意时才会变红：额度或上下文超过 80%，或者缓存命中率低于 50%。
 - **有动感但不打扰**：额度进度条上有一道缓慢的扫光，所有进度条同步移动。
 - **两端原生适配**：
   - 终端里是一行字符，图标可以用 Nerd Font 或普通 Unicode 字符，并且会根据窗口宽度自动调整显示的内容。
   - 桌面端是一行居中的 SVG 图形，额度用进度条显示，上下文用 2×10 的点阵灯显示，并且支持浅色和深色模式。
-- **轻量**：不读文件、不运行程序、不联网，只读取 Claude Code 本来就有的用量数据。
+- **轻量**：不读写文件、不联网。除了 Claude Code 本来就有的数据，它只在会话目录里运行一条只读的 `git status`。
 
 ## 使用要求
 
-- Claude Code **2.1.287 或更新版本**（模组功能是从这个版本开始提供的），终端和桌面端的 Code 页都可以用。
+- Claude Code **2.1.322 或更新版本**（信息行是在这个版本上开发和验证的），终端和桌面端的 Code 页都可以用。
 - 5h 和 7d 额度只有订阅账号才有数据。没有订阅时，这一行只显示上下文和缓存命中率。
 - **推荐搭配 [Ghostty](https://ghostty.org) 终端使用。** Ghostty 自带这一行用到的图标字体，不用做任何设置就能看到完整效果。其他终端也能用，图标会简单一些。
 
@@ -63,32 +68,33 @@
 在 Claude Code 里输入这两条命令：
 
 ```
-/plugin marketplace add JetsonChan/CC-Usage-Band
-/plugin install usage-band@cc-usage-band
+/plugin marketplace add NeoNeuron/cc-usage-band-plus
+/plugin install usage-band-plus@cc-usage-band-plus
 ```
 
 然后**新开一个会话**，输入框上方就会出现这一行。就这么简单，不需要任何配置。
 
 - 想在当前会话里马上看到？输入 `/reload-plugins`。
 - 5h 和 7d 额度要等会话里 Claude 第一次回复后才会显示。
+- 如果还装着原版 `usage-band`，请把它关掉（`/plugin`），否则两个状态栏会同时显示。
 
 如果只想在一个会话里临时试用，可以从本地克隆后加载：
 
 ```bash
-git clone https://github.com/JetsonChan/CC-Usage-Band.git
-claude --plugin-dir CC-Usage-Band/usage-band
+git clone https://github.com/NeoNeuron/cc-usage-band-plus.git
+claude --plugin-dir cc-usage-band-plus/usage-band-plus
 ```
 
 **更新**
 
 ```
-/plugin marketplace update cc-usage-band
+/plugin marketplace update cc-usage-band-plus
 ```
 
 **卸载**
 
 ```
-/plugin uninstall usage-band@cc-usage-band
+/plugin uninstall usage-band-plus@cc-usage-band-plus
 ```
 
 ## 设置
@@ -108,6 +114,9 @@ export USAGE_BAND_ICONS=unicode   # auto（默认）· nerd · unicode · ascii
 | 5h / 7d | Claude Code 从每次 API 响应中读到的额度窗口 | 四舍五入到整数百分比，重置倒计时每分钟更新一次。 |
 | 上下文 | 最后一次请求的输入总量：未缓存部分 + 缓存读取 + 缓存写入 | 按当前模型的窗口大小计算，1M 和 200K 的模型都能正确显示。桌面端每个点代表窗口的 5%，先点亮上排，再点亮下排。 |
 | 缓存命中率 | 上一轮的 `缓存读取 / (未缓存输入 + 缓存读取 + 缓存写入)` | 把这一轮里所有请求加总后计算，不包括子代理的轮次。 |
+| 模型 · 推理强度 | 主循环最近一次请求使用的模型和推理强度 | 第一次请求之前，显示 `/model` 的值，以及 `effortLevel` 设置或 `CLAUDE_CODE_EFFORT_LEVEL`。模型不支持推理强度时不显示。 |
+| Git | 在会话目录里运行 `git --no-optional-locks status --porcelain=v2 --branch` | 会话开始时、每轮结束后、每次 Bash、Edit、Write、NotebookEdit 调用后读取一次，另外每分钟读取一次。不在仓库里时不显示。 |
+| 待办 | `TodoWrite`、`TaskCreate`、`TaskUpdate` 调用的结果，包括子代理的调用 | 根据模组看到的调用生成，所以模组加载之前创建的任务要等被更新后才会出现。 |
 
 ## 终端兼容性
 
@@ -118,24 +127,26 @@ export USAGE_BAND_ICONS=unicode   # auto（默认）· nerd · unicode · ascii
 | macOS 自带终端 | Unicode | 256 色，自动换算 |
 | 其他终端 | Unicode | 按终端支持的颜色显示 |
 
-如果图标显示成方框，设置 `USAGE_BAND_ICONS=unicode` 就行（见[设置](#设置)）。可以运行 `/usage-band-preview`，在你自己的终端里对比所有样式。
+如果图标显示成方框，设置 `USAGE_BAND_ICONS=unicode` 就行（见[设置](#设置)）。可以运行 `/usage-band-plus-preview`，在你自己的终端里对比所有样式。
 
 ## 隐私与权限
 
 模组运行时的权限和 Claude Code 本身一样，没有沙箱隔离。所以这里列出这个模组会接触的全部内容：
 
-- **读取**：会话的用量数据（`session.measure`、`turn.complete`、`$.session.usage`），以及环境变量 `TERM_PROGRAM` 和 `USAGE_BAND_ICONS`
-- **注册**：一个命令 `/usage-band-preview`
+- **读取**：会话的用量数据（`session.measure`、`turn.complete`、`$.session.usage`）、模型（`$.session.model`、`turn.step`）、`effortLevel` 设置，以及环境变量 `TERM_PROGRAM`、`USAGE_BAND_ICONS` 和 `CLAUDE_CODE_EFFORT_LEVEL`
+- **观察**：`TodoWrite`、`TaskCreate`、`TaskUpdate` 调用的结果，用来生成待办列表；每次调用都原样放行
+- **运行**：一条命令 `git --no-optional-locks status --porcelain=v2 --branch`，在会话目录里执行。它是只读的，不会给仓库加锁。
+- **注册**：一个命令 `/usage-band-plus-preview`
 - **绘制**：输入框上方的这一行
 
-它不读写文件、不运行程序、不联网，也不会把任何数据发送到任何地方。整个模组只有一个文件：[`usage-band/hooks/register.tsx`](./usage-band/hooks/register.tsx)。
+它不读写文件、不运行其他程序、不联网，也不会把任何数据发送到任何地方。整个模组只有一个文件：[`usage-band-plus/hooks/register.tsx`](./usage-band-plus/hooks/register.tsx)。
 
 ## 开发
 
 ```
 .
-├── .claude-plugin/marketplace.json   # cc-usage-band 插件市场
-└── usage-band/
+├── .claude-plugin/marketplace.json   # cc-usage-band-plus 插件市场
+└── usage-band-plus/
     ├── .claude-plugin/plugin.json    # 插件信息
     ├── hooks/register.tsx            # 模组代码
     ├── types/index.d.ts              # 状态类型定义
@@ -143,29 +154,31 @@ export USAGE_BAND_ICONS=unicode   # auto（默认）· nerd · unicode · ascii
 ```
 
 ```bash
-cd usage-band
+cd usage-band-plus
 claude plugin validate .
 claude plugin test .
 ```
 
-修改时用 `claude --plugin-dir ./usage-band` 加载，文件一保存，会话就会自动重新加载。
+修改时用 `claude --plugin-dir ./usage-band-plus` 加载，文件一保存，会话就会自动重新加载。
 
 欢迎提交 Issue 和 Pull Request。
 
 ## 截图
 
+截图里是原版 usage-band 的用量行；信息行显示在它的上方。
+
 **桌面端，浅色模式**
 
-<img src="docs/images/desktop-light-app.png" alt="usage-band 在桌面端的浅色模式效果" width="760">
+<img src="docs/images/desktop-light-app.png" alt="usage-band-plus 在桌面端的浅色模式效果" width="760">
 
 **桌面端，深色模式**
 
-<img src="docs/images/desktop-dark.png" alt="usage-band 在桌面端的深色模式效果" width="760">
+<img src="docs/images/desktop-dark.png" alt="usage-band-plus 在桌面端的深色模式效果" width="760">
 
-**终端**（Ghostty）：宽度不够时会先去掉进度条，再去掉重置时间。运行 `/usage-band-preview` 可以并排对比所有终端样式。
+**终端**（Ghostty）：宽度不够时会先去掉进度条，再去掉重置时间。运行 `/usage-band-plus-preview` 可以并排对比所有终端样式。
 
-<img src="docs/images/terminal.png" alt="usage-band 在终端里的效果" width="760">
+<img src="docs/images/terminal.png" alt="usage-band-plus 在终端里的效果" width="760">
 
 ## 许可证
 
-[MIT](./LICENSE) © Jetson Chan
+[MIT](./LICENSE)。原版 usage-band © Jetson Chan；这个分支的改动由 Kai Chen 完成。详见页首的分支声明。
