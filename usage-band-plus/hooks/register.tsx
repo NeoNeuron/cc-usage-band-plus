@@ -11,12 +11,11 @@ const style = atom({ plugin: 'usage-band-plus', key: 'style' } as const, 'unicod
 const info = atom({ plugin: 'usage-band-plus', key: 'info' } as const, { model: null, effort: null })
 const git = atom({ plugin: 'usage-band-plus', key: 'git' } as const, null)
 const todos = atom({ plugin: 'usage-band-plus', key: 'todos' } as const, [])
-const session = atom({ plugin: 'usage-band-plus', key: 'session' } as const, null)
 
 // One hue per metric; RED takes over only when a metric is in trouble
 const HUE = { five: '#5cc4d6', seven: '#e8a25f', ctx: '#9aa5f5', cache: '#72cf9f' }
 // The info row: model and branch in cyan, the git frame in magenta, todos amber until all are done
-const TINT = { name: '#9aa5f5', model: '#5cc4d6', git: '#c792ea', branch: '#5cc4d6', stat: '#e8a25f', doing: '#e8a25f', done: '#72cf9f' }
+const TINT = { model: '#5cc4d6', git: '#c792ea', branch: '#5cc4d6', stat: '#e8a25f', doing: '#e8a25f', done: '#72cf9f' }
 const RED = '#e5685f'
 const TRACK = '#4a4f5c'
 const FRAME_MS = 200
@@ -217,7 +216,6 @@ export const applyTodoCall = (list: readonly Todo[], tool: string, input: Loose,
 }
 
 const SUBJECT_MAX = 40
-const NAME_MAX = 32
 const clip = (v: string, max: number, more: string) => {
   const chars = [...v]
   return chars.length > max ? `${chars.slice(0, max - 1).join('')}${more}` : v
@@ -228,20 +226,16 @@ const MARKS: Record<Style, { doing: string; done: string; up: string; down: stri
   ascii: { doing: '>', done: 'ok', up: '^', down: 'v', more: '...' },
 }
 
-// drop 0: everything; 1: no todo subject; 2: no ahead/behind; 3: no file counts; 4: no effort;
-// 5: no session name
+// drop 0: everything; 1: no todo subject; 2: no ahead/behind; 3: no file counts; 4: no effort
 export const infoLayout = (
   i: Info,
   g: Git | null,
   list: readonly Todo[],
-  drop: 0 | 1 | 2 | 3 | 4 | 5 = 0,
+  drop: 0 | 1 | 2 | 3 | 4 = 0,
   look: Look = { style: 'unicode', colors: 'true' },
-  name: string | null = null,
 ): Span[] => {
   const k = MARKS[look.style]
   const groups: Span[][] = []
-
-  if (name && drop < 5) groups.push([{ text: clip(name, NAME_MAX, k.more), color: TINT.name }])
 
   if (i.model) {
     const out: Span[] = [{ text: fmtModel(i.model), color: TINT.model }]
@@ -298,13 +292,12 @@ export const fitInfo = (
   list: readonly Todo[],
   cols: number,
   look: Look,
-  name: string | null = null,
 ): Span[] =>
-  ([0, 1, 2, 3, 4, 5] as const).map(d => infoLayout(i, g, list, d, look, name)).find(s => width(s) <= cols) ??
-  infoLayout(i, g, list, 5, look, name)
+  ([0, 1, 2, 3, 4] as const).map(d => infoLayout(i, g, list, d, look)).find(s => width(s) <= cols) ??
+  infoLayout(i, g, list, 4, look)
 
-export const infoText = (i: Info, g: Git | null, list: readonly Todo[], name: string | null = null) =>
-  infoLayout(i, g, list, 0, undefined, name)
+export const infoText = (i: Info, g: Git | null, list: readonly Todo[]) =>
+  infoLayout(i, g, list)
     .map(s => s.text)
     .join('')
 
@@ -505,10 +498,8 @@ export const describe = (
   i: Info = { model: null, effort: null },
   g: Git | null = null,
   list: readonly Todo[] = [],
-  name: string | null = null,
 ) => {
   const parts: string[] = []
-  if (name) parts.push(`session ${name}`)
   if (i.model) parts.push(`model ${fmtModel(i.model)}${i.effort ? `, effort ${i.effort}` : ''}`)
   if (g) {
     const counts = [
@@ -596,54 +587,21 @@ const recordTodoCall = ($: EngineInterface, tool: string, input: Loose, result: 
   return todoWrites
 }
 
-// Claude Code keeps one small record per running session, `<pid>.json` under its config folder's
-// `sessions`, holding the session's id and its name (given by /rename, written by the model, or
-// made from the folder). `$` has no call for the name, so it is read from there.
-export const sessionNameIn = (text: string, id: string): string | null | undefined => {
-  try {
-    const rec = JSON.parse(text) as Loose
-    if (rec.sessionId !== id) return undefined
-    return typeof rec.name === 'string' && rec.name.trim() ? rec.name.trim() : null
-  } catch {
-    return undefined
-  }
-}
-
-// The record that was this session's last time, tried first
-let recordPath: string | null = null
-const refreshName = async ($: EngineInterface) => {
-  let next: string | null = null
-  try {
-    const home = await $.env.get('HOME')
-    const root = (await $.env.get('CLAUDE_CONFIG_DIR')) || (home ? `${home}/.claude` : '')
-    if (!root) return
-    const id = await $.session.id()
-    const dir = `${root}/sessions`
-    const own = recordPath ? sessionNameIn(await $.fs.read(recordPath), id) : undefined
-    if (own !== undefined) next = own
-    else {
-      recordPath = null
-      for (const entry of await $.fs.list(dir)) {
-        if (entry.kind !== 'file' || !entry.name.endsWith('.json') || entry.size > 65_536) continue
-        const found = sessionNameIn(await $.fs.read(`${dir}/${entry.name}`), id)
-        if (found === undefined) continue
-        recordPath = `${dir}/${entry.name}`
-        next = found
-        break
-      }
-    }
-  } catch {
-    // No record to read: the band shows no name
-    recordPath = null
-  }
-  if ((await read($, session)) !== next) await update($, session, () => next)
-}
-
 const EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
 const asEffort = (v: unknown): string | null => {
   if (typeof v === 'number') return String(v)
   const s = typeof v === 'string' ? v.trim().toLowerCase() : ''
   return EFFORTS.has(s) ? s : null
+}
+
+// The effort `/effort` saved for one model, in the settings' `modelSettings`, which wins over the
+// session-wide `effortLevel`. The model may be an id, an id with a variant (`[1m]`) or a name.
+export const modelEffort = (modelSettings: unknown, model: string): string | null => {
+  if (!modelSettings || typeof modelSettings !== 'object') return null
+  const table = modelSettings as Record<string, { effortLevel?: unknown } | undefined>
+  const bare = (v: string) => fmtModel(v.trim().replace(/\[\w+\]$/, '')).toLowerCase()
+  const key = Object.keys(table).find(k => k === model) ?? Object.keys(table).find(k => bare(k) === bare(model))
+  return key ? asEffort(table[key]?.effortLevel) : null
 }
 
 const GIT_DEBOUNCE_MS = 500
@@ -681,7 +639,6 @@ const SAMPLE_MEASURE: Measure = {
   ],
 }
 const SAMPLE_TURN: TurnTokens = { input: 900, output: 2_000, cacheRead: 170_000, cacheWrite: 1_000 }
-const SAMPLE_NAME = 'fix-login-bug'
 const SAMPLE_INFO: Info = { model: 'claude-opus-5-5', effort: 'high' }
 const SAMPLE_GIT: Git = { branch: 'main', modified: 2, staged: 1, untracked: 3, conflicts: 0, ahead: 1, behind: 0 }
 const SAMPLE_TODOS: Todo[] = [
@@ -730,17 +687,17 @@ export const register: Register = on => {
     $.clock.every(60_000, () => {
       void tick($)
       scheduleGit($)
-      // A rename shows within the minute, or when the turn ends
-      void refreshName($)
     })
-    await refreshName($)
     scheduleGit($)
     // The first step of a turn brings the model and effort in force; until then, what the session
     // is set to. A read that fails leaves the row to that first step.
     try {
+      const model = await $.session.model()
       const effort =
-        asEffort(await $.settings.read({ key: 'effortLevel' })) ?? asEffort(await $.env.get('CLAUDE_CODE_EFFORT_LEVEL'))
-      await setInfo($, { model: await $.session.model(), ...(effort ? { effort } : {}) })
+        modelEffort(await $.settings.read({ key: 'modelSettings' }), model) ??
+        asEffort(await $.settings.read({ key: 'effortLevel' })) ??
+        asEffort(await $.env.get('CLAUDE_CODE_EFFORT_LEVEL'))
+      await setInfo($, { model, ...(effort ? { effort } : {}) })
     } catch {
       // Shown from the first step on
     }
@@ -768,10 +725,7 @@ export const register: Register = on => {
         cacheWrite: u.cache_creation_input_tokens,
       })
     }
-    if (e.agentId === undefined) {
-      scheduleGit($)
-      await refreshName($)
-    }
+    if (e.agentId === undefined) scheduleGit($)
     return next(e)
   })
 
@@ -820,7 +774,6 @@ export const register: Register = on => {
     const g = (await read($, git)) ?? SAMPLE_GIT
     const list = await read($, todos)
     const shownTodos = list.length ? list : SAMPLE_TODOS
-    const name = (await read($, session)) ?? SAMPLE_NAME
     const { Box, Text } = $.ui.resolve(e)
     return (
       <Box flexDirection="column">
@@ -831,7 +784,7 @@ export const register: Register = on => {
           <Box key={p.name} flexDirection="column" marginTop={1}>
             <Text dimColor>{p.name}</Text>
             <Box flexDirection="row">
-              {infoLayout(shownInfo, g, shownTodos, 0, p.look, name).map((s, n) => (
+              {infoLayout(shownInfo, g, shownTodos, 0, p.look).map((s, n) => (
                 <Text key={`i${n}`} color={s.color} dimColor={s.dim}>
                   {s.text}
                 </Text>
@@ -857,9 +810,8 @@ export const register: Register = on => {
     const i = await read($, info)
     const g = await read($, git)
     const list = await read($, todos)
-    const name = await read($, session)
     const hasUsage = m !== null || t !== null
-    const hasInfo = name !== null || i.model !== null || g !== null || list.length > 0
+    const hasInfo = i.model !== null || g !== null || list.length > 0
     if (e.props.hasSurvey || (!hasUsage && !hasInfo)) return next(e)
 
     // Desktop and mobile animate inside the SVG, so they never read the frame counter
@@ -870,12 +822,12 @@ export const register: Register = on => {
         <Box flexDirection="column" flexGrow={1} paddingX={1}>
           {hasInfo && (
             <Box flexDirection="row" justifyContent="center">
-              <Text dimColor>{infoText(i, g, list, name)}</Text>
+              <Text dimColor>{infoText(i, g, list)}</Text>
             </Box>
           )}
           {hasUsage && (
             <Box flexDirection="row" justifyContent="center">
-              <Svg source={svg} alt={describe(m, t, i, g, list, name)} width={width} height={height} />
+              <Svg source={svg} alt={describe(m, t, i, g, list)} width={width} height={height} />
             </Box>
           )}
         </Box>
@@ -894,7 +846,7 @@ export const register: Register = on => {
     const look: Look = { style: s, colors: 'true' }
     const cols = e.props.bodyColumns - 2
     const rows = [
-      hasInfo ? fitInfo(i, g, list, cols, look, name) : [],
+      hasInfo ? fitInfo(i, g, list, cols, look) : [],
       hasUsage ? fit(m, t, at, cols, frame, look) : [],
     ]
       .filter(r => r.length > 0)

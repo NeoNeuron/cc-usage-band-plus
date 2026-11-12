@@ -61,7 +61,7 @@ Run `/usage-band-plus-preview` to see the band in every terminal style side by s
 
 Mods run with the same access as Claude Code itself; they are not sandboxed. This one only:
 
-- reads the session's usage figures (`$.session.usage`, `session.measure`, `turn.complete`), its model (`$.session.model`, `turn.step`) and the `effortLevel` setting
+- reads the session's usage figures (`$.session.usage`, `session.measure`, `turn.complete`), its model (`$.session.model`, `turn.step`) and the `effortLevel` and `modelSettings` settings
 - watches the results of `TodoWrite`, `TaskCreate` and `TaskUpdate` calls, passing every call through unchanged
 - runs `git --no-optional-locks status --porcelain=v2 --branch` in the session's directory: read-only, and it takes no lock
 - reads the `TERM_PROGRAM` and `USAGE_BAND_ICONS` environment variables to pick terminal icons, and `CLAUDE_CODE_EFFORT_LEVEL` for the effort

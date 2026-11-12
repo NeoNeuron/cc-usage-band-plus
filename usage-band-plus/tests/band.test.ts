@@ -13,8 +13,8 @@ import {
   infoLayout,
   infoText,
   layout,
+  modelEffort,
   parseGitStatus,
-  sessionNameIn,
   to256,
   width,
 } from '../hooks/register'
@@ -441,76 +441,28 @@ test('todo calls made together are all counted', async ($, on) => {
   await ui.unmount()
 })
 
-test('the session name leads the info row and is the last thing dropped', async () => {
-  const info = { model: 'claude-opus-5-5', effort: 'high' }
-  const look = { style: 'unicode', colors: 'true' } as const
-  expect(infoText(info, GIT, TODOS, 'fix-login-bug')).toBe(
-    'fix-login-bug  Opus 5.5 · high  git:(main* !2 +1 ?3 ↑1)  ▸ Fix the bug (1/3)',
-  )
-  // A name alone still makes a row; a long one is cut
-  expect(infoText({ model: null, effort: null }, null, [], 'x'.repeat(40))).toBe(`${'x'.repeat(31)}…`)
-  const at = (cols: number) =>
-    fitInfo(info, GIT, TODOS, cols, look, 'fix-login-bug')
-      .map(s => s.text)
-      .join('')
-  expect(at(45)).toBe('fix-login-bug  Opus 5.5  git:(main*)  ▸ (1/3)')
-  expect(at(44)).toBe('Opus 5.5  git:(main*)  ▸ (1/3)')
-})
+test('the effort saved for a model wins over the session-wide one', async ($, on) => {
+  const table = { 'claude-opus-5-5': { effortLevel: 'medium' }, 'claude-fable-5-2': { effortLevel: 'low' }, 'claude-haiku-5-5': {} }
+  expect(modelEffort(table, 'claude-opus-5-5')).toBe('medium')
+  // The model as `/model` may show it: with a variant, or by name
+  expect(modelEffort(table, 'claude-fable-5-2[1m]')).toBe('low')
+  expect(modelEffort(table, 'Fable 5.2')).toBe('low')
+  expect(modelEffort(table, 'claude-haiku-5-5')).toBe(null)
+  expect(modelEffort(table, 'claude-sonnet-5-5')).toBe(null)
+  expect(modelEffort(undefined, 'claude-opus-5-5')).toBe(null)
 
-test('the session name is read from the record with this session id', async () => {
-  expect(sessionNameIn('{"sessionId":"s1","name":"fix-login-bug"}', 's1')).toBe('fix-login-bug')
-  // This session's record with no name yet; another session's record; a file that is no record
-  expect(sessionNameIn('{"sessionId":"s1"}', 's1')).toBe(null)
-  expect(sessionNameIn('{"sessionId":"s2","name":"other"}', 's1')).toBeUndefined()
-  expect(sessionNameIn('not json', 's1')).toBeUndefined()
-})
-
-test('a session shows its name, and a rename once the turn ends', async ($, on) => {
   mock.clock(on)
-  mock.env(on, { HOME: '/home/u' })
+  mock.env(on, {})
   mock.store(on)
-  const records: Record<string, string> = {
-    '/home/u/.claude/sessions/1.json': '{"sessionId":"other","name":"someone-else"}',
-    '/home/u/.claude/sessions/2.json': '{"sessionId":"s1","name":"fix-login-bug"}',
-  }
-  let reads = 0
   on('ui.toast', () => ({ value: undefined }) as never)
   on('session.start', ($, e) => ({ cwd: e.cwd }))
-  on('session.id', () => ({ value: 's1' }))
-  on('session.model', () => ({ value: 'Fable 5.2' }))
+  on('session.model', () => ({ value: 'claude-fable-5-2' }))
   on('session.usage', () => ({ value: { context: { tokens: 1_000, window: 1_000_000, percent: 0 }, rateLimits: [] } }) as never)
-  on('settings.read', () => ({ value: {} }) as never)
+  on('settings.read', () => ({ value: { effortLevel: 'high', modelSettings: table } }) as never)
   on('command.register', () => ({ value: { command: 'usage-band-plus-preview' } }))
   on('process.run', () => ({ value: { exitCode: 128, stdout: '', stderr: '' } }) as never)
-  on('fs.list', ($, e) =>
-    ({
-      value:
-        e.path === '/home/u/.claude/sessions'
-          ? ['1.json', '2.json', '2.key'].map(name => ({ name, kind: 'file', size: 60, mtimeMs: 0, isLink: false }))
-          : [],
-    }) as never,
-  )
-  on('fs.read', ($, e) => {
-    reads++
-    return { value: records[e.path] ?? '' } as never
-  })
-  on('turn.complete', () => ({ text: '' }))
-
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const shown = async (surface: 'terminal' | 'desktop') => {
-    const ui = await $.ui.mount({ plugin: 'usage-band-plus', surface, ...BAND })
-    const all = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
-    await ui.unmount()
-    return all
-  }
-  expect(await shown('terminal')).toContain('fix-login-bug  Fable 5.2')
-  expect(await shown('desktop')).toBe('fix-login-bug  Fable 5.2')
-  expect(await shown('terminal')).not.toContain('someone-else')
-
-  // After the first look, only this session's own record is read
-  records['/home/u/.claude/sessions/2.json'] = '{"sessionId":"s1","name":"login fix"}'
-  const before = reads
-  await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' } as never)
-  expect(reads - before).toBe(1)
-  expect(await shown('terminal')).toContain('login fix  Fable 5.2')
+  const ui = await $.ui.mount({ plugin: 'usage-band-plus', surface: 'terminal', ...BAND })
+  expect(await ui.find({ type: 'Text', text: ' · low' })).toBeDefined()
+  await ui.unmount()
 })

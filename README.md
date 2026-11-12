@@ -112,7 +112,7 @@ export USAGE_BAND_ICONS=unicode   # auto (default) · nerd · unicode · ascii
 | 5h / 7d | The rate-limit windows Claude Code reads from each API response | Rounded to whole percent. The reset time counts down every minute. |
 | Context | The last request's input: uncached + cache reads + cache writes | Against the current model's window, so 1M and 200K models both read right. On desktop each dot is 5% of the window, filling the top row first. |
 | Cache hit | Last turn's `cache_read / (input + cache_read + cache_write)` | Summed over every request in the turn. Subagent turns are not counted. |
-| Model · effort | The model and effort of the main loop's latest request | Before the first request: `/model`'s value, and the `effortLevel` setting or `CLAUDE_CODE_EFFORT_LEVEL`. Effort is hidden for a model that takes none. |
+| Model · effort | The model and effort of the main loop's latest request | Before the first request: `/model`'s value, and the effort saved for that model (`modelSettings`), else the `effortLevel` setting, else `CLAUDE_CODE_EFFORT_LEVEL`. Effort is hidden for a model that takes none. |
 | Git | `git --no-optional-locks status --porcelain=v2 --branch` in the session's directory | Read at session start, after each turn, after a Bash, Edit, Write or NotebookEdit call, and every minute. Hidden outside a repository. |
 | Todos | The results of `TodoWrite`, `TaskCreate` and `TaskUpdate` calls, subagents' included | Built from the calls the mod sees, so tasks made before it loaded appear once they are updated. |
 
@@ -131,7 +131,7 @@ If icons show as boxes, set `USAGE_BAND_ICONS=unicode` (see [Configuration](#con
 
 Mods run with the same access as Claude Code itself and are not sandboxed, so here is everything this one touches:
 
-- **Reads** the session's usage figures (`session.measure`, `turn.complete`, `$.session.usage`), its model (`$.session.model`, `turn.step`), the `effortLevel` setting, and the `TERM_PROGRAM`, `USAGE_BAND_ICONS` and `CLAUDE_CODE_EFFORT_LEVEL` environment variables
+- **Reads** the session's usage figures (`session.measure`, `turn.complete`, `$.session.usage`), its model (`$.session.model`, `turn.step`), the `effortLevel` and `modelSettings` settings, and the `TERM_PROGRAM`, `USAGE_BAND_ICONS` and `CLAUDE_CODE_EFFORT_LEVEL` environment variables
 - **Watches** the results of `TodoWrite`, `TaskCreate` and `TaskUpdate` calls for the todo list, and passes every call through unchanged
 - **Runs** one command, `git --no-optional-locks status --porcelain=v2 --branch`, in the session's directory. It is read-only and takes no lock on the repository.
 - **Registers** one command, `/usage-band-plus-preview`

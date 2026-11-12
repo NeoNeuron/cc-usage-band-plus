@@ -11,7 +11,7 @@
       "name": "usage-band-plus",
       "source": "./usage-band-plus",
       "description": "Model, effort, git status and todo progress over the 5h/7d limits, context window and cache hit rate, above the prompt. A fork of usage-band, originally written by Jetson Chan",
-      "version": "0.1.0"
+      "version": "0.1.1"
     }
   ]
 }

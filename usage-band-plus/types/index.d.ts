@@ -28,7 +28,6 @@ declare module 'claude-code' {
       info: Info
       git: Git | null
       todos: Todo[]
-      session: string | null
     }
   }
 }

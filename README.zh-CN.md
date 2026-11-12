@@ -114,7 +114,7 @@ export USAGE_BAND_ICONS=unicode   # auto（默认）· nerd · unicode · ascii
 | 5h / 7d | Claude Code 从每次 API 响应中读到的额度窗口 | 四舍五入到整数百分比，重置倒计时每分钟更新一次。 |
 | 上下文 | 最后一次请求的输入总量：未缓存部分 + 缓存读取 + 缓存写入 | 按当前模型的窗口大小计算，1M 和 200K 的模型都能正确显示。桌面端每个点代表窗口的 5%，先点亮上排，再点亮下排。 |
 | 缓存命中率 | 上一轮的 `缓存读取 / (未缓存输入 + 缓存读取 + 缓存写入)` | 把这一轮里所有请求加总后计算，不包括子代理的轮次。 |
-| 模型 · 推理强度 | 主循环最近一次请求使用的模型和推理强度 | 第一次请求之前，显示 `/model` 的值，以及 `effortLevel` 设置或 `CLAUDE_CODE_EFFORT_LEVEL`。模型不支持推理强度时不显示。 |
+| 模型 · 推理强度 | 主循环最近一次请求使用的模型和推理强度 | 第一次请求之前，显示 `/model` 的值，以及为该模型保存的推理强度（`modelSettings`），其次是 `effortLevel` 设置，再其次是 `CLAUDE_CODE_EFFORT_LEVEL`。模型不支持推理强度时不显示。 |
 | Git | 在会话目录里运行 `git --no-optional-locks status --porcelain=v2 --branch` | 会话开始时、每轮结束后、每次 Bash、Edit、Write、NotebookEdit 调用后读取一次，另外每分钟读取一次。不在仓库里时不显示。 |
 | 待办 | `TodoWrite`、`TaskCreate`、`TaskUpdate` 调用的结果，包括子代理的调用 | 根据模组看到的调用生成，所以模组加载之前创建的任务要等被更新后才会出现。 |
 
@@ -133,7 +133,7 @@ export USAGE_BAND_ICONS=unicode   # auto（默认）· nerd · unicode · ascii
 
 模组运行时的权限和 Claude Code 本身一样，没有沙箱隔离。所以这里列出这个模组会接触的全部内容：
 
-- **读取**：会话的用量数据（`session.measure`、`turn.complete`、`$.session.usage`）、模型（`$.session.model`、`turn.step`）、`effortLevel` 设置，以及环境变量 `TERM_PROGRAM`、`USAGE_BAND_ICONS` 和 `CLAUDE_CODE_EFFORT_LEVEL`
+- **读取**：会话的用量数据（`session.measure`、`turn.complete`、`$.session.usage`）、模型（`$.session.model`、`turn.step`）、`effortLevel` 和 `modelSettings` 设置，以及环境变量 `TERM_PROGRAM`、`USAGE_BAND_ICONS` 和 `CLAUDE_CODE_EFFORT_LEVEL`
 - **观察**：`TodoWrite`、`TaskCreate`、`TaskUpdate` 调用的结果，用来生成待办列表；每次调用都原样放行
 - **运行**：一条命令 `git --no-optional-locks status --porcelain=v2 --branch`，在会话目录里执行。它是只读的，不会给仓库加锁。
 - **注册**：一个命令 `/usage-band-plus-preview`
